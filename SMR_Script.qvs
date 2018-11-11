@@ -1,0 +1,1995 @@
+﻿///$tab Main
+SET ThousandSep=',';
+SET DecimalSep='.';
+SET MoneyThousandSep=',';
+SET MoneyDecimalSep='.';
+SET MoneyFormat='$#,##0.00;($#,##0.00)';
+SET TimeFormat='h:mm:ss TT';
+SET DateFormat='MM/DD/YYYY';
+SET TimestampFormat='MM/DD/YYYY h:mm:ss[.fff] TT';
+SET MonthNames='Jan;Feb;Mar;Apr;May;Jun;Jul;Aug;Sep;Oct;Nov;Dec';
+SET DayNames='Mon;Tue;Wed;Thu;Fri;Sat;Sun';
+
+
+
+$(Include=..\..\..\..\..\Include\IT\Customer_Service\SFDC_Ops_Analytics\PPS_CSS_SFDC_Connection.QVS); 
+$(Include=..\..\..\..\..\Include\IT\Customer_Service\SFDC_Ops_Analytics\GetSchemaName.qvs)
+$(Include=..\..\..\..\..\Include\IT\Customer_Service\SFDC_Ops_Analytics\GetDatabaseName.qvs)
+
+SET QVD_Path_Auth = '..\..\..\..\..\QVD\it\customer_service\sfdc_ops_analytics\Careforce_authorization';
+SET QVD_Path_Case = '..\..\..\..\..\QVD\it\customer_service\sfdc_ops_analytics\Careforce_case_mgmt';
+SET QVD_Path_Comp = '..\..\..\..\..\QVD\it\customer_service\sfdc_ops_analytics\Careforce_Complaints_mgmt';
+SET QVD_Path_Master = '..\..\..\..\..\QVD\it\customer_service\sfdc_ops_analytics\Careforce_masterdata';
+
+
+
+
+
+
+///$tab Section Access
+SECTION Access;
+
+LOAD NTNAME, 
+     Subfield(CREATEDPARTNER, ';') & '|' & Subfield(CHANGEDPARTNER, ';') as %AuthID   
+FROM
+[$(QVD_Path_Auth)\UAM_Transposed.QVD]
+(qvd);
+
+SECTION Application;
+
+LOAD NTNAME, 
+     Subfield(CREATEDPARTNER, ';') & '|' & Subfield(CHANGEDPARTNER, ';') as %AuthID   
+FROM
+[$(QVD_Path_Auth)\UAM_Transposed.QVD]
+(qvd);
+///$tab Mapping & Flat File Load
+
+///************************SiteCode Mapping Load*****************************************************\\
+SP:
+
+Mapping 
+
+LOAD [Site Code], 
+     [Site Description]
+FROM [$(QVD_Path_Master)\PPS_SC_Mapping.QVD]
+(qvd); 
+
+//****************************************Country Code Mapping*************************************************\\
+
+Country_ISO_Map:
+
+LOAD UPPER(Country_ISO_Code__c) as [Country Code], 
+UPPER(Country__c) as [Customer Country]
+FROM
+[..\..\..\..\..\Data\IT\Customer_Service\SFDC_Ops_Analytics\Country_ISO_Map.xlsx]
+(ooxml, embedded labels, table is Sheet1);
+
+
+////****************************User Info***************************************************************\\\\\
+
+UserInfo:
+
+LOAD [Metric Name] as [%Metric Name] , 
+     Description as [%Description],
+     Formula as [%Formula],
+     Format as [%Format], 
+     Notes as [%Notes]
+FROM
+[..\..\..\..\..\Data\IT\Customer_Service\SFDC_Ops_Analytics\Complaint_User_Info.xlsx]
+(ooxml, embedded labels, table is Sheet1);
+
+
+/////************************End Of User Info****************************************************\\\\\\
+
+
+//////************************Complaint KPI Grouping Load**********************************\\\\\
+
+KPIGrouping:
+
+LOAD [Group Name] as [%Group Name], 
+     [Measure Name]as [%Metric Name]
+FROM
+[..\..\..\..\..\Data\IT\Customer_Service\SFDC_Ops_Analytics\Complaint_KPI_Grouping.xlsx]
+(ooxml, embedded labels, table is [KPI GROUPING]);
+
+/////**************End Of KPI Grouping Load***********************************\\\\
+
+//
+//KPITYPE:
+//
+//LOAD [KPI Name] as [Metric Name], 
+//     [KPI Type] 
+//     
+//FROM
+//[..\..\..\..\..\Data\IT\Customer_Service\SFDC_Ops_Analytics\Complaint_KPI_Grouping.xlsx]
+//(ooxml, embedded labels, table is [KPI Type]);
+
+//******************Mapping Load for Root Cause Partner***********************\\
+
+CA:
+
+Mapping
+Load 
+CaseId,
+CaseNumber
+FROM [$(QVD_Path_Case)\PPS_CASE.QVD]
+(qvd) ; 
+
+//**********************RootCasue Partner Mapping Load************************\\
+RP:
+Mapping
+LOAD        Root_Cause_PartnerId,
+            Root_Cause_Partner_Name;
+SQL SELECT *
+FROM $(vdb).$(vSchemaName).v_Dim_Root_Cause_Partner;
+
+//******************************************************************************\\
+
+//********************Language Text Mapping****************************************\\
+
+LN:
+Mapping
+LOAD LanguageCode,    
+    LanguageName;    
+SQL SELECT *
+FROM $(vdb).$(vSchemaName).v_DIM_Language_ISO_Code_Map;
+
+//******************End Language Text Mapping************************************\\\
+
+
+
+
+
+///$tab Fact Table
+
+/////*********************************Complaint Data Load*********************************************\\\\\\\\
+
+V_Fact_Complaint:
+
+Load
+Complaint_Accessory	    			as	[Complaint Accessory]	,
+Complaint_Account_Id				as	AccountId,
+Complaint_Agent_Reason				as	[Complaint Agent Reason]	,
+Complaint_Agent_Reason_Group		as	[Complaint Agent Reason Group]	,
+Complaint_Agreement_And_Next_Steps	as	[Complaint Agreement And Next Steps]	,
+Complaint_Application				as	[Complaint Application]	,
+Complaint_Asset_Id					as	AssetId	,
+Complaint_Attachment_Count			as	[Complaint Attachment Count]	,
+if(Complaint_Auto_Close_Flag = '1','YES','NO')			
+                                    as	[Complaint Auto Close Flag]	,
+
+Complaint_Business_Down_Flag		as	[Complaint Business Down Flag]	,
+Complaint_Case_Closed_By_Id			as	[Complaint Case Closed By Id]	,
+Complaint_Case_Distinct				as	[Complaint Case Distinct]	,
+if(Complaint_Case_Lock_Flag='1','YES','NO')			
+                                    as	[Complaint Case Lock Flag]	,
+Complaint_Case_Status				as	[Complaint Case Status]	,
+Complaint_Case_Subject				as	[Complaint Case Subject]	,
+Complaint_Chat_Issue_Description	as	[Complaint Chat Issue Description]	,
+Complaint_Closed_By_Agent_Level		as	[Complaint Closed By Agent Level]	,
+Complaint_Closed_By_Agent_Name		as	[Complaint Closed By Agent Name]	,
+Complaint_Closed_By_Agent_Partner	as	[Complaint Closed By Agent Partner Organization]	,
+Complaint_Closed_By_Agent_Service_Organization	
+									as	[Complaint Closed By Agent Primary Region]	,
+APPLYMAP('SP',Complaint_Closed_By_Agent_Service_Provider)	
+									as	[Complaint Closed By Agent Site Name]	,
+Complaint_Closed_By_Agent_Team		as	[Complaint Closed By Agent Team]	,
+
+Complaint_Closed_Date_Only			as	[Complaint Closed Date Only]	,
+Complaint_Closed_Flag				as	[Complaint Closed Flag]	,
+Complaint_Closed_Greater_Than_10	as	ComplaintClosedGreaterThan10	,
+Complaint_Closed_Greater_Than_10_And_Less_Than_15	
+									as	ComplaintClosedGreaterThan10AndLessThan15	,
+Complaint_Closed_Greater_Than_15_And_Less_Than_29	
+									as	ComplaintClosedGreaterThan15AndLessThan29	,
+Complaint_Closed_Greater_Than_29	as	ComplaintClosedGreaterThan29	,
+Complaint_Closed_Greater_Than_5_And_Less_Than_10	
+									as	ComplaintClosedGreaterThan5AndLessThan10	,
+Complaint_Closed_Less_Than_Equal_To_5	
+									as	ComplaintClosedLessThanEqualTo5	,
+Complaint_Closed_Time_Only			as	[Complaint Closed Time Only]	,
+Complaint_Cnf_Specification			as	[Complaint Cnf Specification]	,
+Complaint_Contact_Id				as	[Complaint Contact Id]	,
+Complaint_Cost_Type					as	[Complaint Cost Type]	,
+Complaint_Created_By_Agent_Level	as	[Complaint Created By Agent Level]	,
+Complaint_Created_By_Agent_Name	as	[Complaint Created By Agent Name]	,
+Complaint_Created_By_Agent_Partner	as	[Complaint Created By Agent Partner Organization]	,
+Complaint_Created_By_Agent_Service_Organization	as	[Complaint Created By Agent Primary Region]	,
+APPLYMAP('SP',Complaint_Created_By_Agent_Service_Provider)	as	[Complaint Created By Agent Site Name]	,
+Complaint_Created_By_Agent_Team	as	[Complaint Created By Agent Team]	,
+Complaint_Created_By_Id	as	[Complaint Created By Id]	,
+Complaint_Created_Date	as	[Complaint Created Date]	,
+Complaint_Created_Date_Only	as	[Complaint Created Date Only]	,
+Complaint_Created_Time_Only	as	[Complaint Created Time Only]	,
+Complaint_Current_Owner_Agent_Level	as	[Complaint Current Owner Agent Level]	,
+Complaint_Current_Owner_Agent_Region	as	[Complaint Current Owner Agent Region]	,
+Complaint_Current_Owner_Agent_Site_Code	as	[Complaint Current Owner Agent Site Name]	,
+Complaint_Current_Owner_Agent_Team	as	[Complaint Current Owner Agent Team]	,
+UPPER(Complaint_Customer_Country)	as	[Complaint Customer Country]	,
+Complaint_Description	as	[Complaint Description]	,
+Complaint_Email	as	[Complaint Email]	,
+Complaint_Email_Status	as	[Complaint Email Status]	,
+
+Complaint_First_Attempted_Contact_Date_Only	as	[Complaint First Attempted Contact Date Only]	,
+Complaint_First_Attempted_Contact_Time_Only	as	[Complaint First Attempted Contact Time Only]	,
+
+Complaint_First_Contact_Date_Only	as	[Complaint First Contact Date Only]	,
+Complaint_First_Contact_Hours	as	[Complaint First Contact Hours]	,
+Complaint_First_Contact_Hours_Less_Than_Equal_To_8	as	[Complaint First Contact Hours Less Than Equal To 8]	,
+Complaint_First_Contact_Time	as	[Complaint First Contact Time]	,
+Complaint_First_Contact_Time_Only	as	[Complaint First Contact Time Only]	,
+Complaint_Flow_Step	as	[Complaint Flow Step]	,
+if(Complaint_Health_And_Safety_Issue='1','YES','NO')	as	[Complaint Health And Safety Issue]	,
+Complaint_High_Cost	as	[Complaint High Cost]	,
+Complaint_Id	as	[Complaint Id]	,
+Complaint_Initial_Assessment	as	[Complaint Initial Assessment]	,
+Complaint_Is_Agreement_Next_Steps_Up_Flag	as	[Complaint Is Agreement Next Steps Up Flag]	,
+Complaint_Is_Closed_Flag	as	[Complaint Is Closed Flag]	,
+Complaint_Is_Closed_On_Create_Flag	as	[Complaint Is Closed On Create Flag]	,
+Complaint_Is_Deleted_Flag	as	[Complaint Is Deleted Flag]	,
+if(Complaint_Is_Escalated_Flag='1','YES','NO')	as	[Complaint Is Escalated Flag]	,
+IF(Complaint_Is_Owner_Queue_Flag='1','YES','NO')	as	[Complaint Is Owner Queue Flag]	,
+Complaint_Knowledge_Source	as	[Complaint Knowledge Source]	,
+Complaint_Knowledge_Url	as	[Complaint Knowledge Url]	,
+Complaint_Last_Modified_By_Agent_Id	as	[Complaint Last Modified ByAgent Id]	,
+Complaint_Last_Modified_By_Agent_Level	as	[Complaint Last Modified ByAgent Level]	,
+Complaint_Last_Modified_By_Agent_Name	as	[Complaint Last Modified ByAgent Name]	,
+Complaint_Last_Modified_By_Agent_Partner	as	[Complaint Last Modified ByAgent Partner Organization]	,
+Complaint_Last_Modified_By_Agent_Service_Organization	as	[Complaint Last Modified ByAgent Primary Region]	,
+APPLYMAP('SP',Complaint_Last_Modified_By_Agent_Service_Provider)	as	[Complaint Last Modified ByAgent Site Name]	,
+Complaint_Last_Modified_By_Agent_Team	as	[Complaint Last Modified ByAgent Team]	,
+Complaint_Last_Modified_By_Id	as	[Complaint Last Modified ById]	,
+Complaint_Last_Modified_Date	as	[Complaint Last Modified Date]	,
+Complaint_Last_Modified_Date_Only	as	[Complaint Last Modified Date Only]	,
+Complaint_Last_Modified_Time_Only	as	[Complaint Last Modified Time Only]	,
+Complaint_Low_Cost	as	[Complaint Low Cost]	,
+Complaint_Media	as	[Complaint Media]	,
+Complaint_Medium_Cost	as	[Complaint Medium Cost]	,
+Complaint_No_Cost	as	[Complaint No Cost]	,
+Complaint_Number	as	[Complaint Number]	,
+Complaint_Number	as	[SLA Complaint Number]	,
+Complaint_Opened_Flag	as	[Complaint Opened Flag]	,
+Complaint_Operating_System	as	[Complaint Operating System]	,
+Complaint_Origin	as	[Complaint Origin]	,
+Complaint_Original_Case	as	CaseId	,
+UPPER(Complaint_Original_Customer_Country)	as	[Customer Country]	,
+Complaint_Original_Product_Line	as	[Complaint Original Product Line]	,
+Complaint_Original_Product_Number	as	[Complaint Original Product Number]	,
+Complaint_Original_Serial_Number	as	[Complaint Original Serial Number]	,
+Complaint_Otc_Code_After_Override	as	[Complaint Otc Code After Override]	,
+Complaint_Override_Reason	as	[Complaint Override Reason]	,
+Complaint_Override_Region	as	[Complaint Override Region]	,
+Complaint_Owned_By_Crt_Hours	as	[Complaint Owned By Crt Hours]	,
+Complaint_Owned_By_Crt_Hours_Less_Than_Equal_To_6	as	[Complaint Owned By Crt Hours Less Than Equal To 6]	,
+Complaint_Owner_Agent_Level	as	[Complaint Owner Agent Level]	,
+Complaint_Owner_Agent_Name	as	[Complaint Owner Agent Name]	,
+Complaint_Owner_Agent_Partner	as	[Complaint Owner Agent Partner Organization]	,
+Complaint_Owner_Agent_Service_Organization	as	[Complaint Owner Agent Primary Region]	,
+APPLYMAP('SP',Complaint_Owner_Agent_Service_Provider)	as	[Complaint Owner Agent Site Name]	,
+Complaint_Owner_Agent_Team	as	[Complaint Owner Agent Team]	,
+Complaint_Owner_Assignment_Date_Only	as	[Complaint Owner Assignment Date Only]	,
+Complaint_Owner_Assignment_Date_Time	as	[Complaint Owner Assignment Date Time]	,
+Complaint_Owner_Assignment_Time_Only	as	[Complaint Owner Assignment Time Only]	,
+Complaint_Owner_Id	as	[Complaint Owner Id]	,
+Complaint_Owner_Queue	as	[Complaint Owner Queue]	,
+Complaint_Pc_Or_Printer_Code	as	[Complaint Pc Or Printer Code]	,
+IF(Complaint_Premium_Product_Flag=1,'YES','NO')	as	[Complaint Premium Product Flag]	,
+Complaint_Prior_Case_Owners	as	[Complaint Prior Case Owners]	,
+Complaint_Program_Category	as	[Complaint Program Category]	,
+Complaint_Re_Direct_Address	as	[Complaint Re Direct Address]	,
+IF(Complaint_Re_Elevate_Flag='1','YES','NO')	
+                            as	[Complaint Re Elevate Flag]	,
+IF(Complaint_Re_Escalate_Flag='1','YES','NO')	as	[Complaint Re Escalate Flag]	,
+Complaint_Re_Escalation_Start_Date_Only	as	[Complaint Re Escalation Start Date Only]	,
+Complaint_Re_Escalation_Start_Date_Time	as	[Complaint Re Escalation Start Date Time]	,
+Complaint_Re_Escalation_Start_Time_Only	as	[Complaint Re Escalation Start Time Only]	,
+Complaint_Reason_1	as	[Complaint Reason 1]	,
+Complaint_Reason_2	as	[Complaint Reason 2]	,
+Complaint_Reason_3	as	[Complaint Reason 3]	,
+Complaint_Reason_Group_1	as	[Complaint Reason Group 1]	,
+Complaint_Reason_Group_2	as	[Complaint Reason Group 2]	,
+Complaint_Reason_Group_3	as	[Complaint Reason Group 3]	,
+Complaint_Recent_Owner	as	[Complaint Recent Owner]	,
+Complaint_Record_Type_Id	as	[Complaint Record Type Id]	,
+Complaint_Related_Case	as	[Complaint Related Case]	,
+Complaint_Related_Complaint	as	[Complaint Related Complaint]	,
+Complaint_Resolution_Code	as	[Complaint Resolution Code]	,
+Complaint_Root_Cause	as	[Complaint Root Cause]	,
+Applymap('RP',Complaint_Root_Cause_Partner)	as	[Complaint Root Cause Partner]	,
+Complaint_Software_Application	as	[Complaint Software Application]	,
+Complaint_Solution_Checkbox_Flag	as	[Complaint Solution Checkbox Flag]	,
+Complaint_Solution_Reached	as	[Complaint Solution Reached]	,
+Complaint_Solution_Reached_Date_Only	as	[Complaint Solution Reached Date Only]	,
+Complaint_Solution_Reached_Time_Only	as	[Complaint Solution Reached Time Only]	,
+Complaint_Solutions_Total	as	[Complaint Solutions Total]	,
+Complaint_Source	as	[Complaint Source]	,
+Complaint_Spam_Flag	as	[Complaint Spam Flag]	,
+Complaint_Status	as	[Complaint Status]	,
+Complaint_Sub_Category	as	[Complaint Sub Category]	,
+Complaint_Subject	as	[Complaint Subject]	,
+Complaint_Symptom_Code	as	[Complaint Symptom Code]	,
+Complaint_Symptom_Code_Sub_Category	as	[Complaint Symptom Code Sub Category]	,
+Complaint_Tat_Days	as	[Complaint Tat Days]	,
+Complaint_Tat_Hours	as	[Complaint Tat Hours]	,
+Complaint_Top_Category	as	[Complaint Top Category]	,
+Complaint_Total_Order_Amount	as	[Complaint Total Order Amount]	,
+Complaint_Total_Shipping_Amount	as	[Complaint Total Shipping Amount]	,
+Complaint_Translated_Specific_Symptom_Code	as	[Complaint Translated Specific Symptom Code]	,
+Complaint_Translated_Sub_Category	as	[Complaint Translated Sub Category]	,
+Complaint_Translated_Top_Category	as	[Complaint Translated Top Category]	,
+Complaint_Trouble_Shooting_Steps	as	[Complaint Trouble Shooting Steps]	,
+Complaint_Ts_Etl_Created	as	[Complaint Ts Etl Created]	,
+Complaint_Ts_Etl_Updated	as	[Complaint Ts Etl Updated]	,
+Complaint_Type	as	[Complaint Type],	
+Complaint_Owned_By_Crt_Business_Hours	as	[Complaint Owned By Crt Business Hours]	,
+Complaint_First_Contact_Business_Hours	as	[Complaint First Contact Business Hours]	,
+Complaint_Resolution_Agreed_Hours	as	[Complaint Resolution Agreed Hours]	,
+Complaint_Resolution_Agreed_Business_Hours	as	[Complaint Resolution Agreed Business Hours]	,
+Complaint_Resolution_Provided_Hours	as	[Complaint Resolution Provided Hours]	,
+Complaint_Approval_Tat_Pending_Order_Hours	as	[Complaint Approval Tat Pending Order Hours]	,
+Complaint_Approval_Tat_Pending_Authorization_Hours	as	[Complaint Approval Tat Pending HP Authorization Hours]	,
+Complaint_Approval_Tat_In_Process_Hours	as	[Complaint Approval Tat In Process Hours]	,
+Complaint_Tat_Business_Hours	as	[Complaint Tat Business Hours]	,
+Complaint_Owned_By_Crt_Business_Hours_Less_Than_Equal_To_6	as	[Complaint Owned By Crt Business Hours Less Than Equal To 6]	,
+Complaint_First_Contact_Business_Hours_Less_Than_Equal_To_8	as	[Complaint First Contact Business Hours Less Than Equal To 8]	,
+UPPER(IF(len(trim(Complaint_Created_By_Agent_Partner))>0,Complaint_Created_By_Agent_Partner,'<ANY>') &'|'& 
+IF(len(trim(Complaint_Last_Modified_By_Agent_Partner))>0,Complaint_Last_Modified_By_Agent_Partner,'<ANY>')) as AuthID	,
+Complaint_Resolution_Provided_Business_Hours as [Complaint Resolution Provided Business Hours] ,
+
+Complaint_Resolution_Agreed_Business_Days_Greater_Than_10	as	[Complaint Resolution Agreed Business Days Greater Than 10]	,
+Complaint_Resolution_Agreed_Business_Days_Less_Than_Equal_To_5	as	[Complaint Resolution Agreed Business Days Less Than Equal To 5]	,
+Complaint_Resolution_Agreed_Days_Greater_Than_10	as	[Complaint Resolution Agreed Days Greater Than 10]	,
+Complaint_Resolution_Agreed_Days_Less_Than_Equal_To_5	as	[Complaint Resolution Agreed Days Less Than Equal To 5]	,
+Complaint_Tat_Business_Days_Greater_Than_10	as	[Complaint Tat Business Days Greater Than 10]	,
+Complaint_Tat_Business_Days_Greater_Than_10_And_Less_Than_Equal_To_15	as	[Complaint Tat Business Days Greater Than 10 And Less Than Equal To 15]	,
+Complaint_Tat_Business_Days_Greater_Than_15_And_Less_Than_Equal_To_29	as	[Complaint Tat Business Days Greater Than 15 And Less Than Equal To 29]	,
+Complaint_Tat_Business_Days_Greater_Than_29	as	[Complaint Tat Business Days Greater Than 29]	,
+Complaint_Tat_Business_Days_Greater_Than_5_And_Less_Than_Equal_To_10	as	[Complaint Tat Business Days Greater Than 5 And Less Than Equal To 10]	,
+Complaint_Tat_Business_Days_Less_Than_Equal_To_5	as	[Complaint Tat Business Days Less Than Equal To 5],
+Complaint_Tat_Business_Days	as	[Complaint Tat Business Days]	,
+Complaint_Resolution_Agreed_Days	as	[Complaint Resolution Agreed Days]	,
+Complaint_Resolution_Agreed_Business_Days	as	[Complaint Resolution Agreed Business Days]	,
+Complaint_Resolution_Provided_Days	as	[Complaint Resolution Provided Days]	,
+Complaint_Resolution_Provided_Business_Days	as	[Complaint Resolution Provided Business Days],
+Complaint_First_Complaint_Agent as [First Complaint Agent],
+Complaint_First_Complaint_Agent_Name as [First Complaint Agent Name],
+Complaint_First_Complaint_Agent_Level as [First Complaint Agent Level],
+Complaint_First_Complaint_Agent_Team as [First Complaint Agent Team] ,
+Complaint_First_Complaint_Agent_Region as [First Complaint Agent Region],
+//Complaint_First_Complaint_Agent_Site_Code as [First Complaint Agent Site Name],
+APPLYMAP('SP',Complaint_First_Complaint_Agent_Site_Code)	as	[First Complaint Agent Site Name]	,
+Complaint_Drv_First_Complaint_Agent_Partner as [First Complaint Agent Partner],
+Complaint_First_Changed_By_Id        as [Complaint First Agent Id],
+Complaint_In_Process_Date_Only as [Complaint In Process Date],
+Complaint_In_Process_Time_Only as [Complaint In Process Time]	
+FROM 
+[$(QVD_Path_Comp)\PPS_Complaint.QVD](qvd);
+
+
+/////***************************************************End Of Complaint Load******************************************************\\\\\\
+
+
+///$tab Complaint Solution and SLA
+
+/////////*********************Complaint Solution Data Load******************************\\\\
+
+Left keep(V_Fact_Complaint)
+
+Dim_Complaint_Solution:
+
+Load
+Complaint_Solution_Approval_Tat	as	[Complaint Solution Approval Tat]	,
+Complaint_Solution_Approval_Tat_Biz	as	[Complaint Solution Approval Tat Biz]	,
+IF(Complaint_Solution_Approve_Flag='1','YES','NO')
+	                            as	[Complaint Solution Approve Flag]	,
+Complaint_Solution_Complaint_Id	as	[Complaint Id]	,
+Complaint_Solution_Cost_Type	as	[Complaint Solution Cost Type]	,
+Complaint_Solution_Created_By_Agent_Level	as	[Complaint Solution Created By Agent Level]	,
+Complaint_Solution_Created_By_Agent_Name	as	[Complaint Solution Created By Agent Name]	,
+Complaint_Solution_Created_By_Agent_Partner	as	[Complaint Solution Created By Agent Partner Organization]	,
+Complaint_Solution_Created_By_Agent_Service_Organization	as	[Complaint Solution Created By Agent Primary Region]	,
+APPLYMAP('SP',Complaint_Solution_Created_By_Agent_Service_Provider)	as	[Complaint Solution Created By Agent Site Code]	,
+Complaint_Solution_Created_By_Agent_Team	as	[Complaint Solution Created By Agent Team]	,
+Complaint_Solution_Created_By_Id	as	[Complaint Solution Created By Id]	,
+
+Complaint_Solution_Created_Date_Only	as	[Complaint Solution Created Date Only]	,
+Complaint_Solution_Created_Time_Only	as	[Complaint Solution Created Time Only]	,
+Complaint_Solution_Currency	as	[Complaint Solution Currency]	,
+Complaint_Solution_Description	as	[Complaint Solution Description]	,
+Complaint_Solution_Id	as	[Complaint Solution Id]	,
+Complaint_Solution_Is_Deleted_Flag	as	[Complaint Solution Is Deleted Flag]	,
+Complaint_Solution_Last_Modified_By_Agent_Level	as	[Complaint Solution Last Modified By Agent Level]	,
+Complaint_Solution_Last_Modified_By_Agent_Name	as	[Complaint Solution Last Modified By Agent Name]	,
+Complaint_Solution_Last_Modified_By_Agent_Partner	as	[Complaint Solution Last Modified By Agent Partner Organization]	,
+APPLYMAP('SP',Complaint_Solution_Last_Modified_By_Agent_Service_Provider)	as	[Complaint Solution Last Modified By Agent Site Code]	,
+Complaint_Solution_Last_Modified_By_Agent_Team	as	[Complaint Solution Last Modified By Agent Team]	,
+Complaint_Solution_Last_Modified_By_Id	as	[Complaint Solution Last Modified By Id]	,
+Complaint_Solution_Last_Modified_By_Service_Organization	as	[Complaint Solution Last Modified By Agent Primary Region]	,
+
+Complaint_Solution_Last_Modified_Date_only	as	[Complaint Solution Last Modified Date only]	,
+Complaint_Solution_Last_Modified_Time_Only	as	[Complaint Solution Last Modified Time Only]	,
+Complaint_Solution_Last_Referenced_Date	as	[Complaint Solution Last Referenced Date]	,
+
+Complaint_Solution_Name	as	[Complaint Solution Name]	,
+Complaint_Solution_Order_Reference_Number	as	[Complaint Solution Order Reference Number]	,
+Complaint_Solution_Ordered_Product_Number	as	[Complaint Solution Ordered Product Number]	,
+Complaint_Solution_Product_Service_Amount	as	[Complaint Solution Product Service Amount]	,
+Complaint_Solution_Quantity	as	[Complaint Solution Quantity]	,
+Complaint_Solution_Record_Type_Id	as	[Complaint Solution Record Type Id]	,
+Complaint_Solution_Resolution_Agreed_Hours	as	[Complaint Solution Resolution Agreed Hours]	,
+Complaint_Solution_Resolution_Agreed_Business_Hours	as	[Complaint Solution Resolution Agreed Business Hours]	,
+Complaint_Resolution_Provided_Business_Hours	as	[Complaint Solution Resolution Provided Hours]	,
+Complaint_Solution_Serial_Number	as	[Complaint Solution Serial Number]	,
+Complaint_Solution_Shipment_Date_Only	as	[Complaint Solution Shipment Date Only]	,
+Complaint_Solution_Shipment_Time_Only	as	[Complaint Solution Shipment Time Only]	,
+Complaint_Solution_Shipping_Cost	as	[Complaint Solution Shipping Cost]	,
+Complaint_Solution_Solution	as	[Complaint Solution Solution]	,
+Complaint_Solution_Solution_Notes	as	[Complaint Solution Solution Notes]	,
+Complaint_Solution_Status	as	            [Complaint Solution Status]	,
+Complaint_Solution_Status_Icon	as	[Complaint Solution Status Icon]	,
+Complaint_Solution_System_Modstamp	as	[Complaint Solution System Modstamp]	,
+Complaint_Solution_Tax_Vat	as	[Complaint Solution Tax Vat]	,
+Complaint_Solution_Total_Order_Amount	as	[Complaint Solution Total Order Amount]	,
+Complaint_Solution_Tracking_Number	as	[Complaint Solution Tracking Number]	,
+Complaint_Solution_Ts_Etl_Created	as	[Complaint Solution Ts Etl Created]	,
+Complaint_Solution_Ts_Etl_Updated	as	[Complaint Solution Ts Etl Updated],
+Complaint_Resolution_Provided_Business_Hours   as [Complaint Solution Resolution Provided Business Hours]                   	
+
+FROM [$(QVD_Path_Comp)\PPS_ComplaintSolution.QVD]
+(qvd) ;
+
+
+
+////***************************END Of Complaint Solution Data*****************************************\\\\\
+
+
+////**********************SLA Data Load*******************************************************\\\
+Left keep(Dim_Complaint_Solution)
+
+Dim_SLA:
+
+Load 
+Sla_Age_Hours	as	[Sla Age Hours]	,
+Sla_Business_Hour_Id	as	[Sla Business Hour Id]	,
+Sla_Business_Hours_Flag	as	[Sla Business Hours Flag]	,
+Sla_Case_Owner_Id	as	[Sla Case Owner Id]	,
+Sla_Case_Record_Type	as	[Sla Case Record Type]	,
+Sla_Complaint_Solution_Id	as	[Complaint Solution Id]	,
+IF(Sla_Completed ='<img src="resource/Completed_Icon_SLA" alt="Completed" height="17" width="17" border="0"/>','YES','NO')
+                             as	[Sla Completed],
+Sla_Completed_By_Agent_Level	as	[Sla Completed By Agent Level]	,
+Sla_Completed_By_Agent_Name	as	[Sla Completed By Agent Name]	,
+Sla_Completed_By_Agent_Partner	as	[Sla Completed By Agent Partner Organization]	,
+Sla_Completed_By_Agent_Primary_Region	as	[Sla Completed By Agent Primary Region]	,
+APPLYMAP('SP',Sla_Completed_By_Agent_Site_Code)	as	[Sla Completed By Agent Site Code]	,
+Sla_Completed_By_Agent_Team	as	[Sla Completed By Agent Team]	,
+Sla_Completed_By_Id	as	[Sla Completed By Id]	,
+
+Sla_Completion_Date_Only	as	[Sla Completion Date Only]	,
+Sla_Completion_Time_Only	as	[Sla Completion Time Only]	,
+Sla_Created_By_Agent_Level	as	[Sla Created By Agent Level]	,
+Sla_Created_By_Agent_Name	as	[Sla Created By Agent Name]	,
+Sla_Created_By_Agent_Partner	as	[Sla Created By Agent Partner Organization]	,
+Sla_Created_By_Agent_Primary_Region	as	[Sla Created By Agent Primary Region]	,
+APPLYMAP('SP',Sla_Created_By_Agent_Site_Code)	as	[Sla Created By Agent Site Code]	,
+Sla_Created_By_Agent_Team	as	[Sla Created By Agent Team]	,
+Sla_Created_By_Id	as	[Sla Created By Id]	,
+
+Sla_Created_Date_Only	as	[Sla Created Date Only]	,
+Sla_Created_Time_Only	as	[Sla Created Time Only]	,
+Sla_Email_Closed_Flag	as	[Sla Email Closed Flag]	,
+Sla_Email_Reroute_Flag	as	[Sla Email Reroute Flag]	,
+Sla_Last_Modified_By_Agent_Level	as	[Sla Last Modified By Agent Level]	,
+Sla_Last_Modified_By_Agent_Name	as	[Sla Last Modified By Agent Name]	,
+Sla_Last_Modified_By_Agent_Partner	as	[Sla Last Modified By Agent Partner Organization]	,
+Sla_Last_Modified_By_Agent_Primary_Region	as	[Sla Last Modified By Agent Primary Region]	,
+APPLYMAP('SP',Sla_Last_Modified_By_Agent_Site_Code)	as	[Sla Last Modified By Agent Site Code]	,
+Sla_Last_Modified_By_Agent_Team	as	[Sla Last Modified By Agent Team]	,
+Sla_Last_Modified_By_Id	as	[Sla Last Modified By Id]	,
+
+Sla_Last_Modified_Date_Only	as	[Sla Last Modified Date Only]	,
+Sla_Last_Modified_Time_Only	as	[Sla Last Modified Time Only]	,
+Sla_Last_Queue	as	[Sla Last Queue]	,
+
+Sla_Last_Queue_Assignment_Date_Only	as	[Sla Last Queue Assignment Date Only]	,
+Sla_Last_Queue_Assignment_Time_Only	as	[Sla Last Queue Assignment Time Only]	,
+
+Sla_Last_Referenced_Date_Only	as	[Sla Last Referenced Date Only]	,
+Sla_Last_Referenced_Time_Only	as	[Sla Last Referenced Time Only]	,
+Date(floor(Sla_Last_User_Assignment_Date))	as	[Sla Last User Assignment Date]	,
+Time(floor(Sla_Last_User_Assignment_Date))	as	[Sla Last User Assignment Time],
+
+Sla_Last_User_Id	as	[Sla Last User Id]	,
+
+Sla_Last_Viewed_Date_Only	as	[Sla Last Viewed Date Only]	,
+Sla_Last_Viewed_Time_Only	as	[Sla Last Viewed Time Only]	,
+Sla_Metric_Rule_Type	as	[Sla Metric Rule Type]	,
+Sla_MetricId	as	[Sla MetricId]	,
+Sla_Name	as	[Sla Name]	,
+Sla_Number_Of_Reroutes	as	[Sla Number Of Reroutes]	,
+Sla_Open_Email_Flag	as	[Sla Open Email Flag]	,
+Sla_Owner_Id	as	[Sla Owner Id]	,
+Sla_Parent_Id	as	[Sla Parent Id]	,
+Sla_Rule_Id	as	[Sla Rule Id]	,
+Sla_Rule_Name	as	[Sla Rule Name]	,
+
+Sla_Start_Date_Only	as	[Sla Start Date Only]	,
+Sla_Start_Time_Only	as	[Sla Start Time Only]	,
+Sla_System_Modstamp	as	[Sla System Modstamp]	,
+
+Sla_Target_Date_Only	as	[Sla Target Date Only]	,
+Sla_Target_Minus_Current_Date	as	[Sla Target Minus Current Date]	,
+Sla_Target_Time	as	[Sla Target Time]	,
+Sla_Target_Time_Only	as	[Sla Target Time Only]	,
+Sla_Tat_Business_Hours	as	[Sla Tat Business Hours]	,
+Sla_Tat_Days	as	[Sla Tat Days]	,
+Sla_Tat_Hours	as	[Sla Tat Hours]	,
+Sla_Time_Remaining	as	[Sla Time Remaining]	,
+Sla_Ts_Etl_Created	as	[Sla Ts Etl Created]	,
+Sla_Ts_Etl_Updated	as	[Sla Ts Etl Updated]	,
+Sla_Turn_Around_Time	as	[Sla Turn Around Time]	,
+Sla_Type	as	[Sla Type]	,
+Sla_Type_Is_Email_Flag	as	[Sla Type Is Email Flag]	,
+Sla_User_Handling_Time	as	[Sla User Handling Time]	,
+IF(Sla_Violation ='<img src="resource/Violation_Icon" alt="Violated" height="17" width="17" border="0"/>','YES','NO')	
+                        as	[Sla Violation]	
+
+FROM [$(QVD_Path_Comp)\PPS_SLA.QVD]
+
+(qvd) where Sla_Type = 'Complaint Solution TAT';
+
+/////*****************END Of SLA Data Load******************************************\\\\\\
+///$tab AuthorizationBridge
+AuthorizationBridge:
+
+Load distinct * Where Exists(%AuthID);
+LOAD %AuthID, 
+     AuthID
+FROM
+[$(QVD_Path_Auth)\Authorization_Bridge.QVD]
+(qvd);
+DetailTabUsers:
+
+LOAD distinct ACCESS, 
+     NTNAME,
+     DETAIL
+FROM
+[$(QVD_Path_Auth)\UAM_Transposed.QVD]
+(qvd);
+///$tab Dimension
+///********************Case Load***************************************\\\
+
+Left keep(V_Fact_Complaint)
+
+Dim_FACT_Case:
+Load CaseAccessory,
+CaseId,
+CaseAccountId,
+CaseApplication,
+CaseArticleSent,
+CaseAsset,
+CaseAssetId,
+if(CaseAutoClose = '1','YES','NO') as CaseAutoClose,
+CaseBilledFlag,
+CaseBODFlag,
+CaseCallBackCount,
+CaseChangedByAgentLevel,
+CaseChangedByAgentName,
+CaseChangedByAgentTeam,
+CaseChangedByPartner,
+CaseChangedByServiceOrganization,
+applymap('SP',CaseChangedByServiceProvider) as CaseChangedByServiceProvider,
+applymap('Classification_Code',CaseClassificationCode) as CaseClassificationCode,
+CaseClosedByAgentLevel,
+CaseClosedByAgentName,
+CaseClosedbyAgentTeam,
+CaseClosedbyPartner,
+CaseClosedByServiceOrganization,
+applymap('SP',CaseClosedByServiceProvider) as CaseClosedByServiceProvider,
+CaseClosedDt,
+CaseClosedFlag,
+CaseClosedTs,
+CaseCNFSpecification,
+UPPER(CaseCountry) ,
+CaseCountryCode,
+CaseCreatedByAgentLevel,
+CaseCreatedByAgentName,
+CaseCreatedByAgentPartner,
+CaseCreatedByAgentTeam,
+CaseCreatedById,
+CaseCreatedDt,
+CaseCreatedTs,
+CaseCurrentlyElevatedToMentorFlag,
+CaseCurrentlyElevatedToGBUFlag,
+CaseCurrentlyElevatedToCatSupportFlag,
+CaseCurrentlyElevatedFlag,
+CaseCustomerEmailAddress,
+CaseCustomerName,
+CaseCustomerRegion,
+CaseCustomerState,
+CaseEverElevatedToMentorCount,
+CaseEverElevatedToGBUCount,
+CaseEverElevatedToCatSupportCount,
+CaseEverElevatedFlag,
+CaseEmail2CaseInsertFlag,
+CaseEmail2CaseUpdateFlag,
+CaseEmailId,
+CaseEmailStatus,
+CaseEsctoMentorByAgentId,
+CaseEsctoMentorByAgentName,
+CaseESInWarrantyOfferDescriptions,
+CaseESOfferDescription,
+CaseEPRINTFlag,
+CaseESContractCarepackID,
+CaseESDateType,
+Date(CaseESEndDate,'MM/DD/YYYY') as CaseESEndDate,
+CaseESOTCCode,
+Date(CaseESStartDate,'MM/DD/YYYY') as CaseESStartDate,
+CaseESStatus,
+CaseESType,
+CaseEUPFlag,
+CaseEUPOHFlag,
+CaseFactoryWarrantyFlag,
+CaseFirstElevatedDtWo,
+CaseFirstElevatedTsWo,
+CaseFirstElevatedDatetimeWo,
+CaseFromSFDCCaseClosedBy,
+CaseFromSFDCCaseDistinct,
+CaseFromSFDCComplaintCount,
+CaseFromSFDCCurrentOwnerAgentLevel,
+CaseFromSFDCCurrentOwnerAgentRegion,
+ApplyMap('SP',CaseFromSFDCCurrentOwnerAgentSiteCode) as CaseFromSFDCCurrentOwnerAgentSiteCode ,
+CaseFromSFDCCurrentOwnerAgentTeam,
+CaseFromSFDCEscalatedTATHrs,
+Date(Floor(CaseFromSFDCOwnerAssignmentDateTime)) as CaseFromSFDCOwnerAssignmentDate,
+Time(Floor(CaseFromSFDCOwnerAssignmentDateTime)) as CaseFromSFDCOwnerAssignmentTime,
+CaseFromSFDCLastModifiedByAgent,
+CaseFromSFDCReopenCount,
+CaseFromSFDCServiceOrderCount,
+if(CaseHasMultipleResults = '1','YES','NO') as CaseHasMultipleResults,
+CaseHpsaFlag,
+CaseHomePhone,
+CaseInprocessCount,
+CaseIntrodateFlag,
+CaseInwarrantyFlag,
+if(CaseIsOwnerQueue = '1','YES','NO') as CaseIsOwnerQueue,
+CaseKnowledgeSource,
+CaseLanguage,
+ApplyMap('LN',CaseLanguage) as [Case Language Description],
+CaseLastChangedByAgentId,
+CaseLastChangedByAgentName,
+CaseLastModifiedById,
+CaseLastModifiedDt,
+CaseLastModifiedTs,
+if(CaseLock = '1','YES','NO') as CaseLock,
+CaseManufactureDate,
+CaseMultCompFlag,
+CaseMultSOFlag,
+CaseNewEmailCount,
+CaseNoOfEmailFlag,
+CaseNoOfPhoneFlag,
+CaseNumber,
+CaseOOWFlag,
+CaseOpenedFlag,
+CaseOpenedPartnerFlag,
+CaseOperatingSystem,
+CaseOrigin,
+Case_Channel_Hierarchy as [Primary Channel],
+//If(CaseOrigin = 'Phone' or CaseOrigin ='Telephone' or CaseOrigin ='HPSA Telephone',CaseOrigin) as Phone  ,
+//If(CaseOrigin = 'Web' or CaseOrigin ='Email',CaseOrigin) as Email ,
+//If(CaseOrigin = 'Chat' or CaseOrigin ='HPSA Chat',CaseOrigin) as Chat,
+//If(CaseOrigin = 'Fax',CaseOrigin) as Fax,
+//If(CaseOrigin = 'Social Media',CaseOrigin) as [Social Media],
+CaseOriginalProductLine ,
+CaseOriginalProductNumber,
+CaseOriginalSerialNumber,
+CaseOTCCodeafterOverride,
+CaseOverrideReason,
+CaseOverridereasonBlankFlag,
+CaseOverridereasonPOPFlag,
+CaseOwnerId,
+CaseOwnerName,
+CasePCorPrinterCode,
+CasePendingCallBackCount,
+CasePOPFlag,
+CasePOPRejectedFlag,
+CasePOPServiceOrderFlag,
+CasePremiumProductFlag,
+CaseProductBlankFlag,
+CaseProductLineBlankFlag,
+CaseProgramCategory,
+CaseReDirectAddress,
+if(CaseReElevate='1','YES','NO') as  CaseReElevate,
+CaseRefundedFlag,
+CaseRefThirdpartyFlag,
+Applymap('CA',CaseRelatedCaseId) as CaseRelatedCaseId,
+CaseRepairFlag,
+CaseResolutionBlankFlag,
+CaseResolutionCode,
+CaseResolutionCount,
+CaseResolutionRepairCount,
+CaseResponsibleServiceOrganization,
+ ApplyMap('SP',CaseResponsibleServiceProvider,)as CaseResponsibleServiceProvider,
+CaseRootCause,
+CaseSerialNumberBlankFlag,
+CaseSFDCStatus,
+CaseSoftwareApplication,
+CaseShipFlag,
+CaseShippingAddress,
+if(CaseSpam = '1','YES','NO') as CaseSpam,
+CaseSpecific,
+CaseSpecificDescription,
+CaseSubCategory,
+CaseSFDCSubject,
+CaseSymptomCodeId,
+CaseSymptomCodeSubCategory,
+CaseTopCategory,
+CaseTS_ETL_UPDATED,
+CaseValidDNAPFlag,
+CaseValidOOWDNAPFlag,
+CaseValidOOWFlag,
+CaseWarrantyBlankFlag,
+UserId as CaseUserId
+FROM [$(QVD_Path_Case)\PPS_CASE.QVD]
+(qvd) ;
+//
+//Left join(Dim_FACT_Case)
+//
+//Temp_Fact_Case:
+//
+//Load 
+//CaseNumber,
+//'All Channels' as [All Channels],
+//if(len(Phone)>0,'Phone',(if(len(Email)>0,'Email',(if(len(Chat)>0,'Chat',(if(len([Social Media])>0,'Social Media','Fax'))))))) as "Primary Channel"
+//Resident Dim_FACT_Case;
+
+//Left keep(V_Fact_Complaint)
+
+v_DIM_Account:
+
+Load AccountId ,
+AccountBillingCity,
+AccountBillingCountry,
+AccountBillingPostalCode,
+AccountBillingState,
+AccountBillingStreet,
+AccountName,
+AccountEmailId,
+AccountHomePhone,
+AccountMobilePhone,
+AccountOtherPhone,
+AccountPhone,
+AccountCountryCode,
+AccountCustomerCompanyName,
+AccountBillingAddressLine1,
+AccountBillingAddressLine2,
+AccountBillingAddressLine3,
+AccountCID,
+AccountPrivDelConfirmedBy,
+Date(Floor(AccountPrivDelConfirmedDate)) as AccountPrivDelConfirmedDate ,
+AccountPrivacyDeletionStatus,
+AccountPrivacyRequestBy,
+Date(Floor(AccountPrivacyRequestDate)) as AccountPrivacyRequestDate,
+AccountRequestDeletion
+FROM [$(QVD_Path_Master)\PPS_Account.QVD]
+(qvd);
+
+///************************Asset Load***************************\\
+
+//Left keep(V_Fact_Complaint)
+
+v_DIM_Asset:
+
+Load  AssetId ,
+AssetName,
+AssetSerialNumber,
+AssetStatus,
+AssetProductModel,
+AssetProductType,
+AssetESDateType,
+AssetESStartDate,
+AssetESEndDate,
+AssetESContractCarepackId,
+AssetESOTCCode,
+AssetInWarrantyOfferDesc,
+AssetProductDescription,
+AssetOfferDescription,
+AssetTS_ETL_UPDATED
+
+FROM [$(QVD_Path_Master)\PPS_Asset.QVD]
+(qvd);
+
+
+
+////******************************Product********************************\\\
+V_Dim_Product:
+
+LEFT Keep (V_Fact_Complaint) LOAD business_group,
+     category_name as [Product Sub-Type],
+     MARKETING_SUBCATEGORY_NAME ,
+     primary_path,
+     PRODUCT_BIGSERIES_NAME as [Product Big Series],
+     PRODUCT_LINE_CODE as [PL Code],
+     PRODUCT_LINE_DESC,
+     PRODUCT_LINE_NAME as [Product Line],
+     PRODUCT_NUMBER_DESC as [Product Number],
+     PRODUCT_DESC as [Product Description],
+     product_number_id,
+     CaseOriginalProductNumber as [Complaint Original Product Number],
+     PRODUCT_SERIES_NAME as [Product Series],
+     product_type_name as [Product Type],
+     relationships_seq_number,
+     SUPPORT_SUBCATEGORY_NAME as [Product Category]
+  FROM [$(QVD_Path_Master)\PPS_PRODUCT.QVD]
+(qvd);  
+ 
+
+//****************************Product Line*****************************************************\\
+
+V_Dim_PL:
+
+LEFT Keep (V_Fact_Complaint) 
+LOAD BUSINESS_AREA as [Business Area],
+     BUSINESS_UNIT as [Business Unit],
+     SEGMENT as Segment,
+     SUBSEGMENT as [Sub Segment],
+     PL_DESCRIPTION as [PL Description],
+     PRODUCT_LINE_CODE AS [Complaint Original Product Line]
+FROM
+[$(QVD_Path_Master)\PPS_PL.QVD]
+(qvd); 
+
+
+//*********************************Geography**************************************************\\
+
+V_Dim_Geography:
+
+LOAD 
+COUNTRY_NAME as [Country Name],
+//if(len(COUNTRY_NAME)=2 or len(COUNTRY_NAME)=3 ,Upper(COUNTRY_NAME),Capitalize(COUNTRY_NAME)) as [Country Name],
+GLOBAL as [Global],
+ISO_COUNTRY_CD as [Country Code],
+REGION1 as [Region 1] ,
+REGION2 as [Region 2],
+SUB_REG1 as [Sub Region 1],
+SUB_REG2 as [Sub Region 2]
+ FROM [$(QVD_Path_Master)\PPS_GEOGRAPHY.QVD]
+(qvd);
+
+
+
+/////***************************User Load****************************\\\\\\
+
+v_DIM_User:
+
+Load 
+SFDCUserName,
+UserAgentAllSupportRegions,
+UserAgentCountry,
+UserAgentEmployeeNumber,
+UserAgentLanguageCode,
+UserAgentPartnerOrganizationName,
+UserId 
+FROM [$(QVD_Path_Master)\PPS_User.QVD]
+(qvd); 
+
+
+
+//**************************Resident Tables For User*****************************************************\\
+CreatedBy:
+
+Load 
+SFDCUserName as [Complaint Created By UserName],
+UserAgentAllSupportRegions As [Complaint Created By Agent Region],
+UserAgentCountry As [Complaint Created By Agent Country],
+UserAgentEmployeeNumber as [Complaint Created By EMPNO] ,
+UserAgentLanguageCode as [Complaint Created By Agent Language],
+Applymap('LN',UserAgentLanguageCode) as [Complaint Created By Agent Language Description],
+UserId as [Complaint Created By Id]
+resident v_DIM_User;
+
+ChangedBy:
+
+Load SFDCUserName as [Complaint Changed By UserName],
+UserAgentAllSupportRegions as [Complaint Changed By Agent Region],
+UserAgentCountry as [Complaint Changed By Agent Country],
+UserAgentEmployeeNumber as [Complaint Changed By EMPNO],
+Applymap('LN',UserAgentLanguageCode) as [Complaint Changed By Agent Language Description],
+UserAgentLanguageCode as [Complaint Changed By Agent Language],
+UserId as [Complaint Last Modified ByAgent Id]
+resident v_DIM_User;
+
+OwnerId:
+
+Load SFDCUserName as [Complaint OwnerId UserName],
+UserAgentAllSupportRegions as [Complaint OwnerId Agent Region],
+UserAgentCountry as [Complaint OwnerId Country],
+UserAgentEmployeeNumber as [Complaint OwnerId EMPNO],
+UserAgentLanguageCode as [Complaint OwnerId Language],
+Applymap('LN',UserAgentLanguageCode) as [Complaint OwnerId Language Description],
+UserAgentPartnerOrganizationName as [Complaint  OwnerIdPartner OrganizationName],
+UserId as [Complaint Owner Id]
+resident v_DIM_User;
+
+ClosedBy:
+
+Load SFDCUserName as [Complaint Closed By UserName],
+UserAgentAllSupportRegions as [Complaint Closed By Agent Region],
+UserAgentCountry as [Complaint Closed By Agent Country],
+UserAgentEmployeeNumber as [Complaint Closed By EMPNO],
+UserAgentLanguageCode as [Complaint Closed By Agent Language],
+Applymap('LN',UserAgentLanguageCode) as [Complaint Closed By Agent Language Description],
+UserId as [Complaint Case Closed By Id]
+resident v_DIM_User;
+
+
+FirstAgentBy:
+
+Load SFDCUserName as [Complaint First Agent UserName],
+UserAgentAllSupportRegions as [Complaint First Agent Region],
+UserAgentCountry as [Complaint First Agent Country],
+UserAgentEmployeeNumber as [Complaint First Agent EMPNO],
+UserAgentLanguageCode as [Complaint First Agent Language],
+Applymap('LN',UserAgentLanguageCode) as [Complaint First Agent Language Description],
+UserId as [Complaint First Agent Id]
+resident v_DIM_User;
+
+
+Drop table v_DIM_User;
+
+
+
+
+///$tab Date
+//*************************************************\\
+			//    Date Dimension \\
+//*************************************************\\
+
+DimDate:
+
+LOAD Calendar_Sort_No as Sort_No, 
+     Date_Id as Date, 
+     Calendar_Date as [Calendar Date], 
+     Fiscal_Date as [Fiscal Date], 
+     Day as [Name Of The Day] , 
+     Calendar_Year as [Calendar Year], 
+     Fiscal_Year as [Fiscal Year], 
+     Calendar_Month as [Calendar Month], 
+     Fiscal_Month as [Fiscal Month], 
+     Calendar_Week as [Calendar Week], 
+     Fiscal_Week as [Fiscal Week], 
+     Calendar_Week_Start_Date as [Calendar Week With Start Date], 
+     Fiscal_Week_Start_Date as [Fiscal Week With Start Date], 
+     Fiscal_Quarter as [Fiscal Quarter], 
+     Calendar_Quarter as [Calendar Quarter]
+FROM [$(QVD_Path_Master)\PPS_Master_Calendar.QVD]
+(qvd);
+
+
+/********************************************************End ******************************************************************************************/ 
+
+
+
+/***************************************************New Code with Date elements in Business requested format *****************************************/
+
+Link:
+LOAD
+ [Complaint Number]
+,Date(floor([Complaint Created Date Only])) as Date
+,'Created' as ReferenceDateType
+RESIDENT V_Fact_Complaint Where Len([Complaint Created Date Only])>0
+;
+CONCATENATE (Link)
+LOAD
+[Complaint Number]
+,Date(floor([Complaint Closed Date Only])) as Date
+,'Closed' as ReferenceDateType
+RESIDENT V_Fact_Complaint  Where Len([Complaint Closed Date Only])>0
+;
+CONCATENATE (Link)
+LOAD
+[Complaint Number]
+,Date(floor([Complaint Last Modified Date Only])) as Date
+,'Last Modified' as ReferenceDateType
+RESIDENT V_Fact_Complaint Where Len([Complaint Last Modified Date Only])>0
+;
+/////******************** Calendar selection Type****************************\\\\
+
+LOAD * INLINE [
+
+%CalendarType,%CalendarTypeNo
+Fiscal Calendar,2
+Calendar,1
+];
+
+////************* Partner Selection Type****************************************\\\
+
+Load * INLINE [ 
+
+%PartnerType,%PartnerTypeNo
+Created By,1
+LastModified By,2
+Closed By,3
+];
+
+
+
+
+///$tab Age Calcualtion
+
+Temp_Complaint_Age:
+
+left join(V_Fact_Complaint)
+
+load  [Complaint Number],
+
+if([Complaint Opened Flag]=1,round(Timestamp(now(),'MM/DD/YYYY hh.mm.ss') -  Timestamp([Complaint Created Date],'MM/DD/YYYY hh.mm.ss'),0.01),0) as ComplaintAge_CRD,
+if([Complaint Opened Flag]=1,round(Timestamp(now(),'MM/DD/YYYY hh.mm.ss') -  Timestamp([Complaint Last Modified Date],'MM/DD/YYYY hh.mm.ss'),0.01),0) as ComplaintAge_LMD
+
+resident V_Fact_Complaint;
+
+//Drop table Temp_Complaint_Age;
+
+/////***************Fixed Bucketing For Age******************************\\
+
+Age:
+
+LOAD * INLINE
+[ AgeGroupNo, ComplaintAgeBucket
+1,<= 5 Day
+2,> 5 to <= 10 Days
+3,> 10 to <= 15 Days
+4,> 15 to <= 29Days
+5,> 29 Days
+];
+
+
+Left Join(V_Fact_Complaint)
+
+load  [Complaint Number],
+(if(ComplaintAge_CRD > 0 and ComplaintAge_CRD <=5 ,1 ,
+(If (ComplaintAge_CRD > 5 and ComplaintAge_CRD <= 10, 2,
+(If(ComplaintAge_CRD > 10 and ComplaintAge_CRD <=15,3,
+(If(ComplaintAge_CRD > 15 and ComplaintAge_CRD <= 29,4,
+(If(ComplaintAge_CRD > 29,5))))))))))as AgeGroupNo Resident V_Fact_Complaint;
+ 
+//////*****************TAT Fixed Bucketing****************************************\\\\\\\
+ 
+
+TAT:
+
+LOAD * INLINE
+[ TATGroupNo, ComplaintTATBucket
+
+1,<= 5 Day
+2,> 5 to <= 10 Days
+3,> 10 to <= 15 Days
+4,> 15 to <= 29 Days
+5,> 10 Days
+6,> 29 Days
+];
+
+Left Join(V_Fact_Complaint)
+
+load  [Complaint Number],
+(if(ComplaintClosedLessThanEqualTo5>0,1,
+(if(ComplaintClosedGreaterThan5AndLessThan10 > 0,2,
+(if(ComplaintClosedGreaterThan10AndLessThan15 >0,3,
+(if(ComplaintClosedGreaterThan15AndLessThan29>0,4,
+(if(ComplaintClosedGreaterThan10>0,5,
+(if(ComplaintClosedGreaterThan29>0,6)))))))))))) as TATGroupNo Resident V_Fact_Complaint;
+
+ 
+
+///$tab Pick Dimensions
+
+//******Pick Dimensions for Tending****************************\\
+
+TrendDim:
+
+Load * Inline [%TDim_No, %TDim
+
+008,Original Business Area\Business Area
+009,Original Business Area\Business Unit
+010,Original Business Area\Segment
+011,Original Business Area\Subsegment
+012,Original Business Area\PL Code
+126,Original Business Area\PL Description
+
+
+002,Customer Geography\Region 1
+003,Customer Geography\Region 2
+004,Customer Geography\Sub Region 1
+005,Customer Geography\Sub Region 2
+006,Customer Geography\Country
+007,Customer Geography\Country Code
+
+021,Calendar\Calendar Year
+022,Calendar\Month
+023,Calendar\Calendar Week
+024,Calendar\Calendar Week Start Date
+025,Calendar\Date
+
+026,Fiscal Calendar\Fiscal Year
+027,Fiscal Calendar\Fiscal Quarter
+028,Fiscal Calendar\Month
+029,Fiscal Calendar\Fiscal Week
+030,Fiscal Calendar\Fiscal Week Start Date
+031,Fiscal Calendar\Date
+
+217,Original Product\Original Product Hierarchy
+013,Original Product\Original Product Hierarchy\Product Type
+014,Original Product\Original Product Hierarchy\Product Sub-Type
+015,Original Product\Original Product Hierarchy\Product Category
+016,Original Product\Original Product Hierarchy\Product Big Series
+017,Original Product\Original Product Hierarchy\Product Series
+018,Original Product\Original Product Hierarchy\Product Line
+019,Original Product\Original Product Hierarchy\Product Line Description
+020,Original Product\Original Product Hierarchy\Product Number
+
+
+037,Complaint\Date\Complaint Created Date
+038,Complaint\Date\Complaint Last Modified Date
+039,Complaint\Date\Complaint Closed Date
+032,Complaint\Complaint Re-Escalate
+033,Complaint\Complaint Agent: Reason
+034,Complaint\Complaint Agent: Reason Group
+035,Complaint\Complaint Status
+036,Complaint\Complaint Health and Safety Issue
+040,Complaint\Complaint Media
+041,Complaint\Complaint Solution Status
+042,Complaint\Complaint Reason 1
+043,Complaint\Complaint Reason 2
+044,Complaint\Complaint Reason 3
+045,Complaint\Complaint Reason Group 1
+046,Complaint\Complaint Reason Group 2
+047,Complaint\Complaint Reason Group 3
+048,Complaint\Complaint Root Cause Partner
+049,Complaint\Complaint Source
+
+050,Complaint Partner\Created By\Created By Hierarchy\Complaint Created By Primary Region
+051,Complaint Partner\Created By\Created By Hierarchy\Complaint Created By Partner Organization
+052,Complaint Partner\Created By\Created By Hierarchy\Complaint Created By Site Name
+053,Complaint Partner\Created By\Created By Hierarchy\Complaint Created By Primary Level
+054,Complaint Partner\Created By\Created By Hierarchy\Complaint Created By Agent Name
+118,Complaint Partner\Created By\Created By Details\Complaint Created By Primary Support Country
+119,Complaint Partner\Created By\Created By Details\Complaint Created By Primary Support Language Code
+119,Complaint Partner\Created By\Created By Details\Complaint Created By Primary Support Language
+
+
+055,Complaint Partner\Last Modified By\Last Modified By Hierarchy\Complaint Last Modified By Primary Region
+056,Complaint Partner\Last Modified By\Last Modified By Hierarchy\Complaint Last Modified By Partner Organization
+057,Complaint Partner\Last Modified By\Last Modified By Hierarchy\Complaint Last Modified By Site Name
+058,Complaint Partner\Last Modified By\Last Modified By Hierarchy\Complaint Last Modified By Primary Level
+059,Complaint Partner\Last Modified By\Last Modified By Hierarchy\Complaint Last Modified By Agent Name
+120,Complaint Partner\Last Modified By\Last Modified By Details\Complaint Last Modified By Primary Support Country
+121,Complaint Partner\Last Modified By\Last Modified By Details\Complaint Last Modified By Primary Support Language Code
+121,Complaint Partner\Last Modified By\Last Modified By Details\Complaint Last Modified By Primary Support Language
+
+
+
+060,Complaint Partner\Closed By\Closed By Hierarchy\Complaint Closed By Primary Region
+061,Complaint Partner\Closed By\Closed By Hierarchy\Complaint Closed By Partner Organization
+062,Complaint Partner\Closed By\Closed By Hierarchy\Complaint Closed By Site Name
+063,Complaint Partner\Closed By\Closed By Hierarchy\Complaint Closed By Primary Level
+064,Complaint Partner\Closed By\Closed By Hierarchy\Complaint Closed By Agent Name
+122,Complaint Partner\Closed By\Closed By Details\Complaint Closed By Primary Support Country
+123,Complaint Partner\Closed By\Closed By Details\Complaint Closed By Primary Support Language Code
+123,Complaint Partner\Closed By\Closed By Details\Complaint Closed By Primary Support Language
+
+
+
+065,Complaint Partner\Owned By\Owned By Hierarchy\Complaint Owned By Primary Region
+066,Complaint Partner\Owned By\Owned By Hierarchy\Complaint Owned By Partner Organization
+067,Complaint Partner\Owned By\Owned By Hierarchy\Complaint Owned By Site Name
+068,Complaint Partner\Owned By\Owned By Hierarchy\Complaint Owned By Primary Level
+069,Complaint Partner\Owned By\Owned By Hierarchy\Complaint Owned By Agent Name
+124,Complaint Partner\Owned By\Owned By Details\Complaint Owned By Primary Support Country
+125,Complaint Partner\Owned By\Owned By Details\Complaint Owned By Primary Support Language Code
+125,Complaint Partner\Owned By\Owned By Details\Complaint Owned By Primary Support Language
+
+
+050,Complaint Partner\First Agent By\First Agent Hierarchy\Complaint First Agent Primary Region
+051,Complaint Partner\First Agent By\First Agent Hierarchy\Complaint First Agent Partner Organization
+052,Complaint Partner\First Agent By\First Agent Hierarchy\Complaint First Agent Site Name
+053,Complaint Partner\First Agent By\First Agent Hierarchy\Complaint First Agent Primary Level
+054,Complaint Partner\First Agent By\First Agent Hierarchy\Complaint First Agent Name
+118,Complaint Partner\First Agent By\First Agent Details\Complaint First Agent Primary Support Country
+119,Complaint Partner\First Agent By\First Agent Details\Complaint First Agent Primary Support Language Code
+119,Complaint Partner\First Agent By\First Agent Details\Complaint First Agent Primary Support Language
+
+
+
+071,Complaint Solution\Date\Complaint Solution Created Date
+072,Complaint Solution\Date\Complaint Solution Last Modified Date
+070,Complaint Solution\Complaint Solution Approve
+073,Complaint Solution\Complaint Solution
+074,Complaint Solution\Complaint Solution Status
+075,Complaint Solution\Complaint Solution Created By Agent Name
+076,Complaint Solution\Complaint Solution Last Modified By Agent Name
+
+080,Case\Date\Case Closed Date
+081,Case\Date\Case Created Date
+082,Case\Date\Case Last Modified Date 
+083,Case\Date\Case Owner Assignment Date
+095,Case\Channel\Primary Channel
+096,Case\Channel\Incoming Channel
+078,Case\Case Operating System
+079,Case\Case Resolution Code
+084,Case\Case Software Application
+085,Case\Case Status
+086,Case\Case Program/Category
+087,Case\Case Override Reason
+128,Case\Case OTC Code
+127,Case\Case OTC Code after Override 
+088,Case\Case Auto Close
+089,Case\Case Spam
+090,Case\Case Created By
+091,Case\Case Closed By
+092,Case\Case Last Modified By
+
+
+
+106,Symptom Code\Symptom Code Hierarchy\Symptom Code Top Category
+107,Symptom Code\Symptom Code Hierarchy\Symptom Code Sub Category
+108,Symptom Code\Symptom Code Hierarchy\Symptom Code Specific
+109,Symptom Code\Symptom Code Hierarchy\Symptom Code Specific Description
+110,Symptom Code\Symptom Code Hierarchy\Symptom Code CNF Specification
+111,Symptom Code\Symptom Code Details\Symptom Code PC or Printer Code
+112,Symptom Code\Symptom Code Details\Symptom Code Classification Code
+113,Symptom Code\Symptom Code Details\Symptom Code Application
+
+097,Product\Case OTC Code
+098,Product\Case Original Product Line
+099,Product\Case Original Product Number
+100,Product\Case Warranty Type	
+
+101,Others\Complaints Age Bucket - Fixed
+102,Others\Complaints Age Bucket - Dynamic
+103,Others\Complaints TAT Bucket - Fixed
+104,Others\Complaints TAT Bucket - Dynamic
+105,Others\Reference Date
+
+114,Warranty\Warranty Type
+115,Warranty\Warranty End Date
+116,Warranty\Warranty Override Reason
+117,Warranty\Warranty Start Date
+];
+
+
+
+//*****************Pivot Dimensions***********************\\
+
+PivotDim:
+
+Load * Inline [%PivotDim_No,%PivotDim
+
+009,Original Business Area
+010,Original Business Area\Business Area
+011,Original Business Area\Business Unit
+012,Original Business Area\Segment
+013,Original Business Area\Subsegment
+014,Original Business Area\PL Code
+202,Original Business Area\PL Description
+
+001,Customer Geography
+003,Customer Geography\Region 1
+004,Customer Geography\Region 2
+005,Customer Geography\Sub Region 1
+006,Customer Geography\Sub Region 2
+007,Customer Geography\Country
+008,Customer Geography\Country Code
+
+026,Calendar
+027,Calendar\Calendar Year
+028,Calendar\Month
+029,Calendar\Calendar Week
+030,Calendar\Calendar Week Start Date
+031,Calendar\Date
+
+031,Fiscal Calendar
+032,Fiscal Calendar\Fiscal Year
+033,Fiscal Calendar\Fiscal Quarter
+034,Fiscal Calendar\Month
+035,Fiscal Calendar\Fiscal Week
+036,Fiscal Calendar\Fiscal Week Start Date 
+037,Fiscal Calendar\Date
+
+015,Original Product\Original Product Hierarchy
+016,Original Product\Original Product Hierarchy\Product Type
+017,Original Product\Original Product Hierarchy\Product Sub-Type
+018,Original Product\Original Product Hierarchy\Product Category
+019,Original Product\Original Product Hierarchy\Product Big Series
+020,Original Product\Original Product Hierarchy\Product Series
+021,Original Product\Original Product Hierarchy\Product Line
+022,Original Product\Original Product Hierarchy\Product Line Description 
+023,Original Product\Original Product Hierarchy\Product Number
+
+024,Original Product\Original Product Details\Original Serial Number
+025,Original Product\Original Product Details\Product Description
+
+
+046,Complaint\Date\Complaint Created Date
+047,Complaint\Date\Complaint Last Modified Date
+048,Complaint\Date\Complaint Re-Escalation Start Date
+049,Complaint\Date\Complaint Closed Date
+050,Complaint\Date\Complaint First Contact Date
+051,Complaint\Date\Complaint First Attempted Contact Date
+039,Complaint\Complaint Re-Escalate
+040,Complaint\Complaint Number 
+041,Complaint\Complaint Agent: Reason
+042,Complaint\Complaint Agent: Reason Group
+043,Complaint\Complaint Subject
+044,Complaint\Complaint Status
+045,Complaint\Complaint Health and Safety Issue
+052,Complaint\Complaint Media
+053,Complaint\Complaint Solution Status
+054,Complaint\Complaint Reason 1
+055,Complaint\Complaint Reason 2
+056,Complaint\Complaint Reason 3
+057,Complaint\Complaint Reason Group 1
+058,Complaint\Complaint Reason Group 2
+059,Complaint\Complaint Reason Group 3
+060,Complaint\Complaint Root Cause Partner
+061,Complaint\Complaint Source
+
+062,Complaint Partner\Created By\Created By Hierarchy
+063,Complaint Partner\Created By\Created By Hierarchy\Complaint Created By Primary Region
+064,Complaint Partner\Created By\Created By Hierarchy\Complaint Created By Partner Organization
+065,Complaint Partner\Created By\Created By Hierarchy\Complaint Created By Site Name
+066,Complaint Partner\Created By\Created By Hierarchy\Complaint Created By Primary Level
+067,Complaint Partner\Created By\Created By Hierarchy\Complaint Created By Agent Name
+068,Complaint Partner\Created By\Created By Details\Complaint Created By Agent Team
+069,Complaint Partner\Created By\Created By Details\Complaint Created By Employee Number
+070,Complaint Partner\Created By\Created By Details\Complaint Created By Primary Support Country
+071,Complaint Partner\Created By\Created By Details\Complaint Created By Primary Support Language Code
+071,Complaint Partner\Created By\Created By Details\Complaint Created By Primary Support Language
+072,Complaint Partner\Created By\Created By Details\Complaint Created By Username
+
+073,Complaint Partner\Last Modified By\Last Modified By Hierarchy
+074,Complaint Partner\Last Modified By\Last Modified By Hierarchy\Complaint Last Modified By Primary Region
+075,Complaint Partner\Last Modified By\Last Modified By Hierarchy\Complaint Last Modified By Partner Organization
+076,Complaint Partner\Last Modified By\Last Modified By Hierarchy\Complaint Last Modified By Site Name 
+077,Complaint Partner\Last Modified By\Last Modified By Hierarchy\Complaint Last Modified By Primary Level
+078,Complaint Partner\Last Modified By\Last Modified By Hierarchy\Complaint Last Modified By Agent Name
+079,Complaint Partner\Last Modified By\Last Modified By Details\Complaint Last Modified By Agent Team
+080,Complaint Partner\Last Modified By\Last Modified By Details\Complaint Last Modified By Employee Number
+081,Complaint Partner\Last Modified By\Last Modified By Details\Complaint Last Modified By Primary Support Country
+082,Complaint Partner\Last Modified By\Last Modified By Details\Complaint Last Modified By Primary Support Language Code
+082,Complaint Partner\Last Modified By\Last Modified By Details\Complaint Last Modified By Primary Support Language
+083,Complaint Partner\Last Modified By\Last Modified By Details\Complaint Last Modified By Username
+
+
+
+
+084,Complaint Partner\Closed By\Closed By Hierarchy
+085,Complaint Partner\Closed By\Closed By Hierarchy\Complaint Closed By Primary Region
+086,Complaint Partner\Closed By\Closed By Hierarchy\Complaint Closed By Partner Organization
+087,Complaint Partner\Closed By\Closed By Hierarchy\Complaint Closed By Site Name
+088,Complaint Partner\Closed By\Closed By Hierarchy\Complaint Closed By Primary Level
+089,Complaint Partner\Closed By\Closed By Hierarchy\Complaint Closed By Agent Name
+090,Complaint Partner\Closed By\Closed By Details\Complaint Closed By Agent Team
+091,Complaint Partner\Closed By\Closed By Details\Complaint Closed By Employee Number
+092,Complaint Partner\Closed By\Closed By Details\Complaint Closed By Primary Support Country
+093,Complaint Partner\Closed By\Closed By Details\Complaint Closed By Primary Support Language Code
+093,Complaint Partner\Closed By\Closed By Details\Complaint Closed By Primary Support Language
+094,Complaint Partner\Closed By\Closed By Details\Complaint Closed By Username
+
+
+095,Complaint Partner\Owned By\Owned By Hierarchy
+096,Complaint Partner\Owned By\Owned By Hierarchy\Complaint Owned By Primary Region
+097,Complaint Partner\Owned By\Owned By Hierarchy\Complaint Owned By Partner Organization
+098,Complaint Partner\Owned By\Owned By Hierarchy\Complaint Owned By Site Name
+099,Complaint Partner\Owned By\Owned By Hierarchy\Complaint Owned By Primary Level
+100,Complaint Partner\Owned By\Owned By Hierarchy\Complaint Owned By Agent Name
+101,Complaint Partner\Owned By\Owned By Details\Complaint Owned By Agent Team
+102,Complaint Partner\Owned By\Owned By Details\Complaint Owned By Employee Number
+103,Complaint Partner\Owned By\Owned By Details\Complaint Owned By Primary Support Country
+104,Complaint Partner\Owned By\Owned By Details\Complaint Owned By Primary Support Language Code
+104,Complaint Partner\Owned By\Owned By Details\Complaint Owned By Primary Support Language
+105,Complaint Partner\Owned By\Owned By Details\Complaint Owned By Username
+
+062,Complaint Partner\First Agent By\First Agent Hierarchy
+063,Complaint Partner\First Agent By\First Agent Hierarchy\Complaint First Agent Primary Region
+064,Complaint Partner\First Agent By\First Agent Hierarchy\Complaint First Agent Partner Organization
+065,Complaint Partner\First Agent By\First Agent Hierarchy\Complaint First Agent Site Name
+066,Complaint Partner\First Agent By\First Agent Hierarchy\Complaint First Agent Primary Level
+067,Complaint Partner\First Agent By\First Agent Hierarchy\Complaint First Agent Name
+068,Complaint Partner\First Agent By\First Agent Details\Complaint First Agent Team
+069,Complaint Partner\First Agent By\First Agent Details\Complaint First Agent Employee Number
+070,Complaint Partner\First Agent By\First Agent Details\Complaint First Agent Primary Support Country
+071,Complaint Partner\First Agent By\First Agent Details\Complaint First Agent Primary Support Language Code
+071,Complaint Partner\First Agent By\First Agent Details\Complaint First Agent Primary Support Language
+072,Complaint Partner\First Agent By\First Agent Details\Complaint First Agent Username
+
+109,Complaint Solution\Date\Complaint Solution Created Date
+113,Complaint Solution\Date\Complaint Solution Last Modified Date
+118,Complaint Solution\Date\Complaint Solution Shipment Date
+
+107,Complaint Solution\Complaint Solution Approve
+108,Complaint Solution\Complaint Solution Number
+100,Complaint Solution\Complaint Solution Currency
+111,Complaint Solution\Complaint Solution Description
+112,Complaint Solution\Complaint Solution Tracking Number
+114,Complaint Solution\Complaint Solution Order Reference Number
+115,Complaint Solution\Complaint Solution Product/Service Amount
+116,Complaint Solution\Complaint Solution Product Part Number
+117,Complaint Solution\Complaint Solution Serial Number
+119,Complaint Solution\Complaint Solution 
+120,Complaint Solution\Complaint Solution Status
+121,Complaint Solution\Complaint Solution Created By
+122,Complaint Solution\Complaint Solution Last Modified By
+
+
+141,Case\Date\Case Created Date
+142,Case\Date\Case Last Modified Date 
+143,Case\Date\Case Owner Assignment Date
+144,Case\Date\Case Closed Date
+162,Case\Channel\Primary Channel
+163,Case\Channel\Incoming Channel
+138,Case\Case Number
+139,Case\Case Operating System
+140,Case\Case Resolution Code
+145,Case\Case Software Application
+147,Case\Case Subject
+148,Case\Case Status
+149,Case\Case Program/Category
+150,Case\Case Override Reason
+151,Case\Case Auto Close
+203,Case\Case OTC Code
+152,Case\Case OTC Code after Override 
+153,Case\Case Spam
+154,Case\Case Is Owner Queue
+155,Case\Case Related Case
+156,Case\Case Created By
+157,Case\Case Last Modified By
+159,Case\Case Closed By
+
+
+202,Symptom Code\Symptom Code Hierarchy
+189,Symptom Code\Symptom Code Hierarchy\Symptom Code Top Category
+190,Symptom Code\Symptom Code Hierarchy\Symptom Code Sub Category
+191,Symptom Code\Symptom Code Hierarchy\Symptom Code Specific
+192,Symptom Code\Symptom Code Hierarchy\Symptom Code Specific Description
+193,Symptom Code\Symptom Code Hierarchy\Symptom Code CNF Specification
+194,Symptom Code\Symptom Code Details\Symptom Code PC or Printer Code
+195,Symptom Code\Symptom Code Details\Symptom Code Classification Code
+196,Symptom Code\Symptom Code Details\Symptom Code Application
+
+
+170,Customer\Account ID
+171,Customer\Account Name
+180,Customer\Billing Street
+177,Customer\Billing City
+179,Customer\Billing State/Province
+178,Customer\Billing Country
+181,Customer\Billing Zip/Postal Code
+182,Customer\Company Name
+172,Customer\Email
+173,Customer\Phone
+174,Customer\Home Phone
+175,Customer\Mobile
+176,Customer\Other Phone
+
+
+164,Product
+165,Product\Case OTC Code
+166,Product\Case Original Product Line
+167,Product\Case Original Product Number
+168,Product\Case Original Serial Number
+169,Product\Warranty Type
+
+
+183,Others\Complaints Age Bucket - Fixed
+184,Others\Complaints Age Bucket - Dynamic
+185,Others\Complaints TAT Bucket - Fixed
+186,Others\Complaints TAT Bucket - Dynamic
+187,Others\Reference Date
+
+197,Warranty\Warranty Contract/Carepack ID
+198,Warranty\Warranty Type
+199,Warranty\Warranty End Date
+200,Warranty\Warranty Override Reason
+201,Warranty\Warranty Start Date
+
+];
+
+//077,Case\Case Incoming Channel
+//038,Complaint
+//106,Complaint Solution
+//136,Case
+//170,Customer
+//160,Channel
+//146,Case\Case CNF Specification
+//158,Case\Case Owned By
+//093,Case\Case Owned By
+///$tab Pick Metrics
+
+////////*********************Inline For Default Reports*****************************\\\
+
+KPI_Grouping_BM:
+
+Load * Inline [%KPI_BM_Name,%KPI_BM_No
+Complaint Volume,BM18
+Complaint SLA,BM19
+Complaint TAT,BM22
+Complaint Age,BM20
+Complaint Resolution,BM21
+Adhoc Analysis,BM24
+];
+///********************************Pick Metrics********************************\\\
+
+Metrics:
+
+Load * Inline [ %KPINo, %KPIName
+
+001	,	# of Complaints
+002	,	# of Complaint Solutions
+071 ,   # of Standalone Complaints
+003	,	# of Complaint Re-Escalations
+004	,	# of Attachments on Complaints
+005	,	Avg Complaints Age Days (Created Date)
+006	,	# of Complaints (Age <=5 Days)
+007	,	# of Complaints (Age >5 to <=10 Days)
+008	,	# of Complaints (Age >10 to <=15 Days)
+009	,	# of Complaints (Age >15 to <=29 Days)
+010	,	# of Complaints (Age >29 Days)
+011	,	# of Complaints (Time to Own) <= 6 hrs
+012	,	# of Complaints Closed
+013	,	Avg Complaints TAT Days
+014	,	# of Complaints (TAT <=5 Days)
+015	,	# of Complaints (TAT >10 to <=15 Days)
+016	,	# of Complaints First Contact <=8 hrs
+017	,	# of Cost Resolutions
+018	,	# of High Cost Resolutions
+019	,	# of Medium Cost Resolutions
+020	,	# of Low Cost Resolutions
+021	,	# of No Cost Resolutions
+023	,	% of Complaints (Time to Own) <= 6 hrs
+024	,	% of Closed Complaints
+025	,	% of Complaints (TAT <=5 Days)
+026	,	% of Complaints (TAT >10 to <=15 Days)
+027	,	% of Complaints First Contact <=8 hrs
+028	,	% of Cost Resolutions
+029	,	% of High Cost Resolutions
+030	,	% of Medium Cost Resolutions
+031	,	% of Low Cost Resolutions
+032	,	% of No Cost Resolutions
+033	,	Avg Complaint First Contact TAT (Hrs)
+034	,	Avg Material Costs for Complaints
+035	,	Complaint Solution Order Amount
+037	,	# of Open Complaints
+038	,	% of Complaints (Age <=5 Days)
+039	,	% of Complaints (Age >5 to <=10 Days)
+040	,	% of Complaints (Age >10 to <=15 Days)
+041	,	% of Complaints (Age >15 to <=29 Days)
+042	,	% of Complaints (Age >29 Days)
+043	,	% of Complaint Re-Escalations
+044	,	Complaint Solution Shipping Cost
+045	,	# of Complaints (TAT >5 to <=10 Days)
+046	,	# of Complaints (TAT >15 to <=29 Days)
+047	,	# of Complaints (TAT >29 Days)
+048	,	% of Complaints (TAT >5  to <=10 Days)
+049	,	% of Complaints (TAT >15  to <=29 Days)
+050	,	% of Complaints (TAT >29 Days)
+051	,	# of Complaints (TAT >10 Days)
+052	,	% of Complaints (TAT >10 Days)
+053	,	# of Complaints (Time to Own) <= N hrs
+054	,	# of Complaints (TAT <=N Days)
+055	,	# of Complaints First Contact <=N hrs
+056	,	# of Complaints (Resolution Agreed <=5 Days)
+057	,	# of Complaints (Resolution Agreed >10 Days)
+058	,	# of Complaints (Resolution Agreed <=N Days)
+059	,	# of Complaints (Resolution Provided <=N Days)
+060	,	Avg Complaints (Resolution Agreed TAT Days)
+061	,	% of Complaints (Time to Own) <= N hrs
+062	,	% of Complaints (TAT <=N Days)
+063	,	% of Complaints First Contact <=N hrs
+064	,	% of Complaints (Resolution Agreed <=5 Days)
+065	,	% of Complaints (Resolution Agreed >10 Days)
+066	,	% of Complaints (Resolution Agreed <=N Days)
+067	,	% of Complaints (Resolution Provided <=N Days)
+068	,	Avg Complaint Approval TAT (Hrs) - Pending Approval 
+069	,	Avg Complaint Approval TAT (Hrs) - Pending HP Authorization
+070	,	Avg Complaint Approval TAT (Hrs) - In Process
+
+];
+
+
+KPIType:
+
+Load * Inline [%KPIType,
+Business Hours,
+Customer Hours
+];
+
+OpsKPIType:
+
+Load * Inline [%OpsKPIType,
+Business Hours,
+Customer Hours
+];
+///$tab Complaints Detail
+
+CompDetails:
+Load * Inline [%TComp_Sno,%TCompDim
+
+009,Original Business Area
+010,Original Business Area\Business Area
+011,Original Business Area\Business Unit
+012,Original Business Area\Segment
+013,Original Business Area\Subsegment
+014,Original Business Area\PL Code
+244,Original Business Area\PL Description
+
+001,Customer Geography
+003,Customer Geography\Region 1
+004,Customer Geography\Region 2
+005,Customer Geography\Sub Region 1
+006,Customer Geography\Sub Region 2
+007,Customer Geography\Country
+008,Customer Geography\Country Code
+
+026,Calendar
+027,Calendar\Calendar Year
+028,Calendar\Month
+029,Calendar\Calendar Week
+030,Calendar\Calendar Week Start Date
+031,Calendar\Date
+
+032,Fiscal Calendar
+033,Fiscal Calendar\Fiscal Year
+034,Fiscal Calendar\Fiscal Quarter
+035,Fiscal Calendar\Month
+036,Fiscal Calendar\Fiscal Week
+037,Fiscal Calendar\Fiscal Week Start Date 
+038,Fiscal Calendar\Date
+
+015,Original Product
+300,Original Product\Original Product Hierarchy
+016,Original Product\Original Product Hierarchy\Product Type
+017,Original Product\Original Product Hierarchy\Product Sub-Type
+018,Original Product\Original Product Hierarchy\Product Category
+019,Original Product\Original Product Hierarchy\Product Big Series
+020,Original Product\Original Product Hierarchy\Product Series
+021,Original Product\Original Product Hierarchy\Product Line
+022,Original Product\Original Product Hierarchy\Product Line Description 
+023,Original Product\Original Product Hierarchy\Product Number
+
+024,Original Product\Original Product Details\Original Serial Number
+025,Original Product\Original Product Details\Product Description
+
+227,Complaint
+228,Complaint\Date
+039,Complaint\Date\Complaint Created Date
+040,Complaint\Date\Complaint Created Time
+041,Complaint\Date\Complaint Last Modified Date
+042,Complaint\Date\Complaint Last Modified Time
+043,Complaint\Date\Complaint Re-Escalation Start Date
+044,Complaint\Date\Complaint Re-Escalation Start Time
+045,Complaint\Date\Complaint Closed Date
+046,Complaint\Date\Complaint Closed Time
+047,Complaint\Date\Complaint First Contact Date
+048,Complaint\Date\Complaint First Contact Time
+049,Complaint\Date\Complaint First Attempted Contact Date
+050,Complaint\Date\Complaint First Attempted Contact Time
+500,Complaint\Date\Complaint In Process Date
+501,Complaint\Date\Complaint In Process Time
+
+051,Complaint\Complaint Re-Escalate
+052,Complaint\Complaint Number 
+053,Complaint\Complaint Agent: Reason
+054,Complaint\Complaint Agent: Reason Group
+054,Complaint\Complaint Subject
+055,Complaint\Complaint Status
+056,Complaint\Complaint Health and Safety Issue
+057,Complaint\Complaint Media
+058,Complaint\Complaint Solution Status
+059,Complaint\Complaint Reason 1
+060,Complaint\Complaint Reason 2
+061,Complaint\Complaint Reason 3
+062,Complaint\Complaint Reason Group 1
+063,Complaint\Complaint Reason Group 2
+064,Complaint\Complaint Reason Group 3
+065,Complaint\Complaint Root Cause Partner
+066,Complaint\Complaint Solution Reached
+067,Complaint\Complaint Source
+
+229,Complaint Partner
+245,Complaint Partner\Created By
+068,Complaint Partner\Created By\Created By Hierarchy
+069,Complaint Partner\Created By\Created By Hierarchy\Complaint Created By Primary Region
+070,Complaint Partner\Created By\Created By Hierarchy\Complaint Created By Partner Organization
+071,Complaint Partner\Created By\Created By Hierarchy\Complaint Created By Site Name
+072,Complaint Partner\Created By\Created By Hierarchy\Complaint Created By Primary Level
+073,Complaint Partner\Created By\Created By Hierarchy\Complaint Created By Agent Name
+
+230,Complaint Partner\Created By\Created By Details
+074,Complaint Partner\Created By\Created By Details\Complaint Created By Agent Team
+075,Complaint Partner\Created By\Created By Details\Complaint Created By Employee Number
+076,Complaint Partner\Created By\Created By Details\Complaint Created By Primary Support Country
+077,Complaint Partner\Created By\Created By Details\Complaint Created By Primary Support Language Code
+077,Complaint Partner\Created By\Created By Details\Complaint Created By Primary Support Language
+078,Complaint Partner\Created By\Created By Details\Complaint Created By Username
+
+246,Complaint Partner\Last Modified By
+079,Complaint Partner\Last Modified By\Last Modified By Hierarchy
+080,Complaint Partner\Last Modified By\Last Modified By Hierarchy\Complaint Last Modified By Primary Region
+081,Complaint Partner\Last Modified By\Last Modified By Hierarchy\Complaint Last Modified By Partner Organization
+082,Complaint Partner\Last Modified By\Last Modified By Hierarchy\Complaint Last Modified By Site Name 
+083,Complaint Partner\Last Modified By\Last Modified By Hierarchy\Complaint Last Modified By Primary Level
+084,Complaint Partner\Last Modified By\Last Modified By Hierarchy\Complaint Last Modified By Agent Name
+
+231,Complaint Partner\Last Modified By\Last Modified By Details
+085,Complaint Partner\Last Modified By\Last Modified By Details\Complaint Last Modified By Agent Team
+086,Complaint Partner\Last Modified By\Last Modified By Details\Complaint Last Modified By Employee Number
+087,Complaint Partner\Last Modified By\Last Modified By Details\Complaint Last Modified By Primary Support Country
+088,Complaint Partner\Last Modified By\Last Modified By Details\Complaint Last Modified By Primary Support Language Code
+088,Complaint Partner\Last Modified By\Last Modified By Details\Complaint Last Modified By Primary Support Language
+089,Complaint Partner\Last Modified By\Last Modified By Details\Complaint Last Modified By Username
+
+
+247,Complaint Partner\Closed By
+090,Complaint Partner\Closed By\Closed By Hierarchy
+091,Complaint Partner\Closed By\Closed By Hierarchy\Complaint Closed By Primary Region
+092,Complaint Partner\Closed By\Closed By Hierarchy\Complaint Closed By Partner Organization
+093,Complaint Partner\Closed By\Closed By Hierarchy\Complaint Closed By Site Name
+094,Complaint Partner\Closed By\Closed By Hierarchy\Complaint Closed By Primary Level
+095,Complaint Partner\Closed By\Closed By Hierarchy\Complaint Closed By Agent Name
+
+232,Complaint Partner\Closed By\Closed By Details
+096,Complaint Partner\Closed By\Closed By Details\Complaint Closed By Agent Team
+097,Complaint Partner\Closed By\Closed By Details\Complaint Closed By Employee Number
+098,Complaint Partner\Closed By\Closed By Details\Complaint Closed By Primary Support Country
+099,Complaint Partner\Closed By\Closed By Details\Complaint Closed By Primary Support Language Code
+099,Complaint Partner\Closed By\Closed By Details\Complaint Closed By Primary Support Language
+100,Complaint Partner\Closed By\Closed By Details\Complaint Closed By Username
+
+248,Complaint Partner\Owned By
+101,Complaint Partner\Owned By\Owned By Hierarchy
+102,Complaint Partner\Owned By\Owned By Hierarchy\Complaint Owned By Primary Region
+103,Complaint Partner\Owned By\Owned By Hierarchy\Complaint Owned By Partner Organization
+104,Complaint Partner\Owned By\Owned By Hierarchy\Complaint Owned By Site Name
+105,Complaint Partner\Owned By\Owned By Hierarchy\Complaint Owned By Primary Level
+106,Complaint Partner\Owned By\Owned By Hierarchy\Complaint Owned By Agent Name
+
+233,Complaint Partner\Owned By\Owned By Details
+107,Complaint Partner\Owned By\Owned By Details\Complaint Owned By Agent Team
+108,Complaint Partner\Owned By\Owned By Details\Complaint Owned By Employee Number
+109,Complaint Partner\Owned By\Owned By Details\Complaint Owned By Primary Support Country
+110,Complaint Partner\Owned By\Owned By Details\Complaint Owned By Primary Support Language Code
+110,Complaint Partner\Owned By\Owned By Details\Complaint Owned By Primary Support Language
+111,Complaint Partner\Owned By\Owned By Details\Complaint Owned By Username
+
+229,Complaint Partner
+245,Complaint Partner\First Agent By
+068,Complaint Partner\First Agent By\First Agent Hierarchy
+069,Complaint Partner\First Agent By\First Agent Hierarchy\Complaint First Agent Primary Region
+070,Complaint Partner\First Agent By\First Agent Hierarchy\Complaint First Agent Partner Organization
+071,Complaint Partner\First Agent By\First Agent Hierarchy\Complaint First Agent Site Name
+072,Complaint Partner\First Agent By\First Agent Hierarchy\Complaint First Agent Primary Level
+073,Complaint Partner\First Agent By\First Agent Hierarchy\Complaint First Agent Name
+
+230,Complaint Partner\First Agent By\First Agent Details
+074,Complaint Partner\First Agent By\First Agent Details\Complaint First Agent Team
+075,Complaint Partner\First Agent By\First Agent Details\Complaint First Agent Employee Number
+076,Complaint Partner\First Agent By\First Agent Details\Complaint First Agent Primary Support Country
+077,Complaint Partner\First Agent By\First Agent Details\Complaint First Agent Primary Support Language
+077,Complaint Partner\First Agent By\First Agent Details\Complaint First Agent Primary Support Language Code
+078,Complaint Partner\First Agent By\First Agent Details\Complaint First Agent Username
+
+234,Complaint Solution
+235,Complaint Solution\Date
+112,Complaint Solution\Date\Complaint Solution Created Date
+113,Complaint Solution\Date\Complaint Solution Created Time
+114,Complaint Solution\Date\Complaint Solution Last Modified Date
+115,Complaint Solution\Date\Complaint Solution Last Modified Time
+116,Complaint Solution\Date\Complaint Solution Shipment Date
+117,Complaint Solution\Date\Complaint Solution Shipment Time
+
+118,Complaint Solution\Complaint Solution Approve
+119,Complaint Solution\Complaint Solution Number
+120,Complaint Solution\Complaint Solution Currency
+121,Complaint Solution\Complaint Solution Description
+122,Complaint Solution\Complaint Solution Tracking Number
+123,Complaint Solution\Complaint Solution Order Reference Number
+124,Complaint Solution\Complaint Solution Product/Service Amount
+125,Complaint Solution\Complaint Solution Product Part Number
+126,Complaint Solution\Complaint Solution Serial Number
+127,Complaint Solution\Complaint Solution 
+128,Complaint Solution\Complaint Solution Status
+129,Complaint Solution\Complaint Solution Created By
+130,Complaint Solution\Complaint Solution Last Modified By
+
+236,Case
+237,Case\Date
+131,Case\Date\Case Created Date
+132,Case\Date\Case Created Time
+133,Case\Date\Case Last Modified Date 
+134,Case\Date\Case Last Modified Time 
+135,Case\Date\Case Owner Assignment Date
+136,Case\Date\Case Owner Assignment Time
+137,Case\Date\Case Closed Date
+138,Case\Date\Case Closed Time
+
+226,Case\Channel
+174,Case\Channel\Primary Channel
+175,Case\Channel\Incoming Channel
+140,Case\Case Number
+141,Case\Case Operating System
+142,Case\Case Resolution Code
+143,Case\Case Software Application
+145,Case\Case Subject
+146,Case\Case Status
+147,Case\Case Program/Category
+148,Case\Case Override Reason
+149,Case\Case Auto Close
+245,Case\Case OTC Code
+150,Case\Case OTC Code after Override 
+151,Case\Case Spam
+152,Case\Case Is Owner Queue
+153,Case\Case Related Case
+154,Case\Case Created By
+155,Case\Case Last Modified By
+157,Case\Case Closed By
+
+238,Symptom Code
+206,Symptom Code\Symptom Code Hierarchy
+207,Symptom Code\Symptom Code Hierarchy\Symptom Code Top Category
+208,Symptom Code\Symptom Code Hierarchy\Symptom Code Sub Category
+209,Symptom Code\Symptom Code Hierarchy\Symptom Code Specific
+210,Symptom Code\Symptom Code Hierarchy\Symptom Code Specific Description
+211,Symptom Code\Symptom Code Hierarchy\Symptom Code CNF Specification
+239,Symptom Code\Symptom Code Details
+212,Symptom Code\Symptom Code Details\Symptom Code PC or Printer Code
+213,Symptom Code\Symptom Code Details\Symptom Code Classification Code
+214,Symptom Code\Symptom Code Details\Symptom Code Application
+
+240,Customer
+302,Customer\Account ID
+158,Customer\Account Name
+159,Customer\Master ID
+303,Customer\Billing Address Line 1
+304,Customer\Billing Address Line 2
+305,Customer\Billing Address Line 3
+169,Customer\Billing Street
+166,Customer\Billing City
+168,Customer\Billing State/Province
+167,Customer\Billing Country
+170,Customer\Billing Zip/Postal Code
+171,Customer\Company Name
+160,Customer\Email
+161,Customer\Phone
+162,Customer\Home Phone
+163,Customer\Mobile
+164,Customer\Other Phone
+
+
+
+241,SLA Information
+242,SLA Information\Date
+176,SLA Information\Date\SLA Completion Date
+177,SLA Information\Date\SLA Completion Time
+178,SLA Information\Date\SLA Created Date
+179,SLA Information\Date\SLA Created Time
+180,SLA Information\Date\SLA Last Queue Assignment Date
+181,SLA Information\Date\SLA Last Queue Assignment Time
+182,SLA Information\Date\SLA Last User Assignment Date
+183,SLA Information\Date\SLA Last User Assignment Time
+184,SLA Information\Date\SLA Start Date
+185,SLA Information\Date\SLA Start Time
+186,SLA Information\Date\SLA Target Date
+187,SLA Information\Date\SLA Target Time
+
+188,SLA Information\SLA Business Hours Flag
+189,SLA Information\SLA Complaint Number
+190,SLA Information\SLA Case Record Type
+191,SLA Information\SLA Complaint Solution
+192,SLA Information\SLA Completed
+193,SLA Information\SLA Last Queue
+194,SLA Information\SLA Rule Name
+195,SLA Information\SLA Metric Name
+196,SLA Information\SLA Target Time (Hours)
+197,SLA Information\SLA Type
+198,SLA Information\SLA Violation
+199,SLA Information\SLA Created By Agent Name
+200,SLA Information\SLA Completed By Agent Name
+
+
+242,Others
+201,Others\Complaints Age Bucket - Fixed
+202,Others\Complaints Age Bucket - Dynamic
+203,Others\Complaints TAT Bucket - Fixed
+204,Others\Complaints TAT Bucket - Dynamic
+205,Others\Reference Date
+
+
+215,Product
+216,Product\Case OTC Code
+217,Product\Case:Original Product Line
+
+243,Warranty
+221,Warranty\Warranty Contract/Carepack ID
+222,Warranty\Warranty Type
+223,Warranty\Warranty End Date
+224,Warranty\Warranty Override Reason
+225,Warranty\Warranty Start Date
+
+];
+//149,Complaint Solution\Shipment Time
+//209,SLA Information\Case Record Type
+//044,Complaint\Original Case: Case Number
+//113,Complaint Solution\Complaint: Case Number
+//144,Case\Case CNF Specification
+//156,Case\Case Owned By
+//218,Product\Case:Original Product Number
+//219,Product\Case:Original Serial Number
+//220,Product\Warranty Type
+///$tab Variables
+set HidePrefix='_' ;
+set HidePrefix='%' ;
+SET vDashboardShowBookmark='False';
+SET vShowFilterDialog='False';
+SET vShowMetrics='False';
+
+//******************KPI Expressions from Excel*************************\\
+
+Expression:
+
+LOAD [Variable Name] as Variable, 
+     [KPI Expression] as Expression, 
+     [KPI Name]
+FROM
+[..\..\..\..\..\Data\IT\Customer_Service\SFDC_Ops_Analytics\Case_Variables_V3.xls]
+(biff, embedded labels, table is Complaint$);
+
+Let vNumberOfRows = NoOfRows('Expression');
+For I = 0 to (vNumberOfRows - 1)
+Let vVariable_Name = Peek('Variable',I,'Expressions');
+Let [$(vVariable_Name)] = Peek('Expression',I,'Expression');
+Next 
+
+Drop table Expression;
+
+
+
+///$tab Renaming of Fields
+RENAME Fields 
+
+[Complaint Original Product Number] to [Orig Product Number];
+///$tab Careforce Home
+/**************** Careforce Home  *************************/
+
+NavigationButtons:
+LOAD ObjectID, 
+     Text, 
+     Document,
+     Variable,
+     Expression,
+     ToolTip
+FROM
+[..\..\..\..\..\Data\IT\Customer_Service\SFDC_Ops_Analytics\NavigationButtons.xlsx]
+(ooxml, embedded labels, table is Button);
+
+Let vNumberOfRows = NoOfRows('NavigationButtons');
+For I = 0 to (vNumberOfRows - 1)
+Let vVariable_Name = Peek('Variable',I,'Expressions');
+Let [$(vVariable_Name)] = Peek('Expression',I,'Expression');
+Next 
+
+LET vNumberOfRows = null();
+LET I = null();
+LET vVariable_Name = null();
+
+
+Messgae:
+
+LOAD DisplayVariable, 
+     Message
+FROM
+[..\..\..\..\..\Data\IT\Customer_Service\SFDC_Ops_Analytics\NavigationButtons.xlsx]
+(ooxml, embedded labels, table is Detail);
+
+
+
+/**************** End *****************************/
